@@ -1,0 +1,86 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - name: create Docker config directory
+      file:
+        path: /etc/docker
+        state: directory
+
+    - name: changing Docker to systemd driver
+      copy:
+        dest: "/etc/docker/daemon.json"
+        content: |
+          {
+            "exec-opts": ["native.cgroupdriver=systemd"]
+          }
+
+    - name: install Docker
+      apt:
+        name: docker.io
+        state: present
+        update_cache: true
+
+    - name: install APT Transport HTTPS
+      apt:
+        name: apt-transport-https
+        state: present
+
+    - name: Ensure /etc/apt/keyrings exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: add Kubernetes apt-key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key
+        dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+        mode: '0644'
+        force: true
+
+    - name: add Kubernetes' APT repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /"
+        state: present
+        update_cache: yes
+
+    - name: install kubelet
+      apt:
+        name: kubelet=1.29.2-1.1
+        state: present
+        update_cache: true
+
+    - name: install kubeadm
+      apt:
+        name: kubeadm=1.29.2-1.1
+        state: present
+
+- hosts: control_plane
+  become: yes
+  tasks:
+    - name: install kubectl
+      apt:
+        name: kubectl=1.29.2-1.1
+        state: present
+        force: yes
+
+    - name: Download Helm install script
+      get_url:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        dest: /tmp/get_helm.sh
+        mode: '0755'
+
+    - name: Install Helm
+      shell: /tmp/get_helm.sh
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Verify Helm installation
+      command: helm version
+      register: helm_version_output
+      changed_when: false
+
+    - debug:
+        var: helm_version_output.stdout
+

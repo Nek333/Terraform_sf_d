@@ -1,0 +1,47 @@
+---
+- name: Install Jenkins
+  hosts: srv
+  become: true
+  tasks:
+    - name: Install Java
+      apt:
+        name: openjdk-17-jdk
+        state: present
+
+    - name: Fetch Jenkins repository key
+      get_url:
+        url: https://pkg.jenkins.io/debian/jenkins.io-2023.key
+        dest: /usr/share/keyrings/jenkins-keyring.asc
+        mode: '0644'
+
+    - name: Add Jenkins repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian binary/"
+        state: present
+        update_cache: yes
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+
+    - name: Start Jenkins service
+      service:
+        name: jenkins
+        state: started
+        enabled: yes
+
+    - name: Wait for Jenkins to start up
+      wait_for:
+        path: "/var/lib/jenkins/secrets/initialAdminPassword"
+        state: present
+        timeout: 60  # adjust the timeout to your needs
+
+    - name: Display initial admin password
+      command: cat /var/lib/jenkins/secrets/initialAdminPassword
+      register: jenkins_admin_password
+
+    - name: Print initial admin password
+      debug:
+        msg: "Jenkins initial admin password is: {{ jenkins_admin_password.stdout }}"
+
